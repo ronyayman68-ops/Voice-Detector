@@ -1,50 +1,59 @@
 import streamlit as st
 from transformers import pipeline
-import librosa
-import torch
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="VoiceAI Classifier", layout="centered")
+st.set_page_config(page_title="Global Music Classifier", layout="centered")
 
 # --- AI MODEL LOADING ---
 @st.cache_resource
-def load_audio_model():
-    # Using a specialized model for Emotion Recognition in Speech
-    return pipeline("audio-classification", model="ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition")
+def load_multi_classifier():
+    # This model is excellent for cross-language tasks
+    return pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
 
-classifier = load_audio_model()
+classifier = load_multi_classifier()
 
 # --- UI HEADER ---
-st.title("🎙️ Voice Emotion Classifier")
-st.write("Upload a voice recording to analyze the emotional tone.")
+st.title("🎵 Global Music Classifier | مصنف الموسيقى")
+st.write("Analyze songs in English or Arabic.")
 
-# --- FILE UPLOADER ---
-audio_file = st.file_uploader("Upload Audio (wav, mp3):", type=["wav", "mp3"])
+# --- INPUT SECTION ---
+# Clean, minimal input fields for the user
+artist_name = st.text_input("Artist Name | اسم الفنان", placeholder="e.g., Amr Diab or Taylor Swift")
+lyrics_text = st.text_area("Lyrics | كلمات الأغنية", placeholder="Enter lyrics here... / أدخل كلمات الأغنية هنا")
 
-if audio_file is not None:
-    # Display the audio player
-    st.audio(audio_file, format='audio/wav')
-    
-    if st.button("Analyze Voice / تحليل الصوت"):
-        with st.spinner('Processing audio signals...'):
-            # Load audio file using librosa for better compatibility
-            speech, sampling_rate = librosa.load(audio_file, sr=16000)
-            
-            # Run classification
-            results = classifier(speech)
-            
-        st.divider()
-        st.subheader(":نتائج تحليل الصوت") # Keeping your signature Arabic subheader
+# Bilingual Labels for the AI to understand
+genre_map = {
+    "Pop / بوب": "pop music",
+    "Rock / روك": "rock music",
+    "Hip Hop / هيب هوب": "hip hop music",
+    "Classic / كلاسيك": "classical music",
+    "Shaabi / شعبي": "mahraganat or shaabi music",
+    "Tarab / طرب": "arabic tarab music"
+}
+
+if st.button("Analyze / تحليل"):
+    if artist_name and lyrics_text:
+        combined_text = f"Artist: {artist_name}. Lyrics: {lyrics_text}"
         
-        # Display results with blue progress bars
-        for result in results:
-            label = result['label']
-            score = result['score']
-            
-            st.write(f"**{label.capitalize()}**")
-            st.progress(score)
-            st.caption(f"Confidence: {score*100:.2f}%")
-else:
-    st.info("Please upload an audio file to start.")
+        with st.spinner('Analyzing / جاري التحليل...'):
+            # We send the English definitions to the model for better accuracy
+            results = classifier(combined_text, candidate_labels=list(genre_map.values()))
+        
+        st.divider()
+        st.subheader(":نتائج التحليل | Results") 
 
-st.caption("Developed by Rawan Ayman Saber | Data Engineer")
+        # Map the English results back to our bilingual display labels
+        reverse_map = {v: k for k, v in genre_map.items()}
+        
+        for i in range(3):
+            eng_label = results['labels'][i]
+            display_label = reverse_map[eng_label]
+            score = results['scores'][i]
+            
+            st.write(f"**{display_label}** ({score*100:.1f}%)")
+            st.progress(score)
+            
+    else:
+        st.warning("Please fill in both fields | يرجى ملء الحقلين")
+
+st.caption("Developed by Rawan Ayman Saber")
