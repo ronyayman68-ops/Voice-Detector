@@ -1,61 +1,79 @@
 import streamlit as st
 from transformers import pipeline
+import re
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Genre Sniper", layout="centered")
+st.set_page_config(page_title="Genre Sniper Elite", layout="centered")
 
-# --- AI MODEL LOADING (Optimized for Accuracy) ---
+# --- AI MODEL LOADING ---
 @st.cache_resource
-def load_specialized_classifier():
-    # Switching to a model that is better at emotional and stylistic nuances
-    return pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base", return_all_scores=True)
+def load_models():
+    # BART-Large for high-accuracy genre classification
+    genre_classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+    return genre_classifier
 
-# Using a robust fallback for genre specifically
-@st.cache_resource
-def load_genre_model():
-    return pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
-
-classifier = load_genre_model()
+classifier = load_models()
 
 # --- UI HEADER ---
-st.title("🎵 Precision Genre Detector")
-st.write("Specialized in distinguishing **Classic** vs **Hip Hop** styles.")
+st.title("🎯 Genre Sniper Elite")
+st.write("Professional-grade distinction between **Classical** and **Hip Hop**.")
 
 # --- INPUT SECTION ---
-artist = st.text_input("Artist Name", placeholder="e.g., Mozart or Kendrick Lamar")
-lyrics = st.text_area("Lyrics / Description", placeholder="Enter the lines here...")
+col1, col2 = st.columns([1, 2])
+with col1:
+    artist = st.text_input("Artist Name", placeholder="e.g., Bach")
+with col2:
+    lyrics = st.text_area("Lyrics / Style Description", placeholder="Enter text here...")
 
-# Focused labels for higher accuracy
-specific_genres = ["Classical Music", "Hip Hop / Rap Music"]
+# High-precision labels
+labels = ["Classical Music", "Hip Hop / Rap Music"]
 
+# --- HELPER FUNCTION: Explainability ---
+def get_keywords(text, genre):
+    # Data Engineering logic: manual keyword check to explain AI decision
+    hip_hop_hits = ["beat", "rhyme", "flow", "street", "mic", "rap", "hustle", "city"]
+    classic_hits = ["orchestra", "symphony", "piano", "sonata", "violin", "composer", "opera"]
+    
+    found = []
+    check_list = hip_hop_hits if "Hip Hop" in genre else classic_hits
+    for word in check_list:
+        if re.search(r'\b' + word + r'\b', text.lower()):
+            found.append(word)
+    return found
+
+# --- EXECUTION ---
 if st.button("Deep Scan Genre"):
     if artist and lyrics:
-        # Combining data for context
-        full_context = f"This is a song by {artist}. The style and lyrics are: {lyrics}"
+        full_context = f"Artist: {artist}. Content: {lyrics}"
         
-        with st.spinner('Running deep analysis...'):
-            # Multi-label set to False forces the AI to choose the most likely one
-            res = classifier(full_context, candidate_labels=specific_genres, multi_label=False)
+        with st.spinner('Analyzing stylistic patterns...'):
+            res = classifier(full_context, candidate_labels=labels, multi_label=False)
             
         st.divider()
         
-        # Display the Winner
+        # Results Logic
         top_genre = res['labels'][0]
         top_score = res['scores'][0]
         
+        # UI Feedback
         if "Classical" in top_genre:
-            st.success(f"🎯 Prediction: **CLASSIC** ({top_score*100:.1f}%)")
+            st.success(f"🎻 Prediction: **CLASSICAL** ({top_score*100:.1f}%)")
         else:
-            st.info(f"🔥 Prediction: **HIP HOP** ({top_score*100:.1f}%)")
+            st.info(f"🎤 Prediction: **HIP HOP** ({top_score*100:.1f}%)")
+
+        # Explainability Section
+        keywords = get_keywords(lyrics, top_genre)
+        if keywords:
+            st.write(f"**Detected Style Markers:** {', '.join(keywords)}")
             
-        # Comparison Bar
-        st.write("Style Comparison:")
-        cols = st.columns(len(res['labels']))
-        for i, label in enumerate(res['labels']):
-            cols[i].write(label.split(" ")[0])
-            cols[i].progress(res['scores'][i])
+        # Probability Breakdown
+        st.write("---")
+        st.write("Confidence Breakdown:")
+        for label, score in zip(res['labels'], res['scores']):
+            st.write(f"{label.split(' ')[0]}")
+            st.progress(score)
             
     else:
-        st.warning("Please provide both artist and lyrics for an accurate scan.")
+        st.warning("Please provide both Artist and Lyrics.")
 
-st.caption("Custom Model Logic by Rawan Ayman Saber")
+st.caption("Developed by Rawan Ayman Saber | Precision NLP Pipeline")
